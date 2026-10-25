@@ -21,14 +21,14 @@ export async function submitProject(formData: FormData) {
   }
 
   try {
-    // 1. توليد التقرير الفني عبر الذكاء الاصطناعي
+    // توليد التقرير الفني عبر الذكاء الاصطناعي
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" })
     const prompt = `
     أنت مستشار تقني محترف في وكالة برمجيات. قم بتحليل فكرة المشروع التالية واكتب تقرير فني مفصل باللغة العربية.
     يجب أن يحتوي التقرير على:
     ### 1. ملخص الفكرة
     ### 2. المكدس التقني المقترح (Tech Stack) لتطبيقات الجوال، الويب، وقواعد البيانات.
-    ### 3. الجدول الزمني وتقدير التكلفة (استخدم صيغة جداول Markdown لتقدير تكلفة التصميم، التطوير، والاختبار).
+    ### 3. الجدول الزمني وتقدير التكلفة (استخدم صيغة جداول لتقدير تكلفة التصميم، التطوير، والاختبار).
     ### 4. نصائح تقنية هامة.
     
     الرجاء استخدام التنسيق العريض (**نص**) والقوائم النقطية ليكون التقرير مرتباً.
@@ -37,13 +37,13 @@ export async function submitProject(formData: FormData) {
     const aiResult = await model.generateContent(prompt)
     const aiReport = aiResult.response.text()
 
-    // 2. تنفيذ الحفظ في Supabase بشكل صحيح ومنتظر
+    // تنفيذ الحفظ في Supabase
     const { error: dbError } = await supabase.from('project_requests').insert([data])
     if (dbError) {
       console.error('Supabase Error:', dbError)
     }
 
-    // 3. إرسال الإشعار والتقرير لتيليجرام بشكل مباشر
+    // إرسال الإشعار والتقرير لتيليجرام بشكل محمي لتجنب انهيار الكود بسبب التنسيق
     const botToken = process.env.TELEGRAM_BOT_TOKEN
     const chatId = process.env.TELEGRAM_CHAT_ID
 
@@ -56,18 +56,22 @@ export async function submitProject(formData: FormData) {
 ${aiReport}
       `.trim()
 
-      await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: chatId,
-          text: telegramMessage,
-          parse_mode: 'Markdown'
-        }),
-      })
+      try {
+        await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: telegramMessage,
+            // تم إزالة parse_mode مؤقتاً لأن تيليجرام يرفض جداول Markdown الصادرة من الذكاء الاصطناعي
+          }),
+        })
+      } catch (telegramError) {
+        console.error('Telegram Error:', telegramError)
+      }
     }
 
-    // 4. إرجاع تقرير الذكاء الاصطناعي ليظهر للمستخدم على الموقع
+    // إرجاع تقرير الذكاء الاصطناعي ليظهر للمستخدم على الموقع
     return aiReport
 
   } catch (error) {
