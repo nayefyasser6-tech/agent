@@ -1,5 +1,8 @@
 'use server'
 
+// زيادة وقت الانتظار المسموح به في Vercel لتجنب قطع الاتصال قبل رد Gemini
+export const maxDuration = 60; 
+
 import { createClient } from '@supabase/supabase-js'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
@@ -18,22 +21,20 @@ export async function submitProject(formData: FormData) {
   }
 
   try {
-    // 1. الحفظ في Supabase
     const { error: dbError } = await supabase.from('project_requests').insert([data])
     if (dbError) console.error('Supabase Error:', dbError)
 
-    // 2. توليد التقرير (معزول لمنع انهيار الكود إذا فشل)
     let aiReport = "تعذر توليد التقرير التلقائي."
     try {
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" })
       const prompt = `اكتب تقرير فني مختصر للفكرة التالية: ${data.project_idea}`
       const aiResult = await model.generateContent(prompt)
       aiReport = aiResult.response.text()
-    } catch (geminiError) {
-      console.error("Gemini Error:", geminiError)
+    } catch (geminiError: any) {
+      // طباعة الخطأ بشكل مفصل أكثر لمعرفة ما إذا كان بسبب المفتاح أو الشبكة
+      console.error("Gemini Detailed Error:", geminiError?.message || geminiError)
     }
 
-    // 3. إرسال تيليجرام
     const botToken = process.env.TELEGRAM_BOT_TOKEN
     const chatId = process.env.TELEGRAM_CHAT_ID
 
@@ -55,13 +56,10 @@ ${aiReport}
         }),
       })
 
-      // طباعة خطأ تيليجرام إن وجد
       if (!telegramResponse.ok) {
         const err = await telegramResponse.json()
         console.error("Telegram API Error:", err)
       }
-    } else {
-      console.error("Missing Telegram Environment Variables")
     }
 
     return aiReport
