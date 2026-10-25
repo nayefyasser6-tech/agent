@@ -18,23 +18,22 @@ export async function submitProject(formData: FormData) {
   }
 
   try {
-    // 1. الحفظ في Supabase أولاً لضمان أمان البيانات حتى لو تعطلت الخدمات الأخرى
+    // 1. الحفظ في Supabase
     const { error: dbError } = await supabase.from('project_requests').insert([data])
-    if (dbError) {
-      console.error('Supabase Error:', dbError)
+    if (dbError) console.error('Supabase Error:', dbError)
+
+    // 2. توليد التقرير (معزول لمنع انهيار الكود إذا فشل)
+    let aiReport = "تعذر توليد التقرير التلقائي."
+    try {
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" })
+      const prompt = `اكتب تقرير فني مختصر للفكرة التالية: ${data.project_idea}`
+      const aiResult = await model.generateContent(prompt)
+      aiReport = aiResult.response.text()
+    } catch (geminiError) {
+      console.error("Gemini Error:", geminiError)
     }
 
-    // 2. توليد التقرير عبر الذكاء الاصطناعي مباشرة
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" })
-    const prompt = `
-    أنت مستشار تقني. حلل هذه الفكرة واكتب تقرير فني مختصر (لا يتجاوز 300 كلمة).
-    يجب أن يحتوي على: 1. ملخص، 2. التقنيات المقترحة، 3. التكلفة التقديرية (بدون استخدام جداول)، 4. نصائح.
-    الفكرة: ${data.project_idea}
-    `
-    const aiResult = await model.generateContent(prompt)
-    const aiReport = aiResult.response.text()
-
-    // 3. إرسال الرسالة إلى تيليجرام مباشرة
+    // 3. إرسال تيليجرام
     const botToken = process.env.TELEGRAM_BOT_TOKEN
     const chatId = process.env.TELEGRAM_CHAT_ID
 
@@ -47,17 +46,24 @@ export async function submitProject(formData: FormData) {
 ${aiReport}
       `.trim()
 
-      await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      const telegramResponse = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           chat_id: chatId,
-          text: telegramMessage.substring(0, 4000), // قص الرسالة لتفادي رفض تيليجرام
+          text: telegramMessage.substring(0, 4000),
         }),
       })
+
+      // طباعة خطأ تيليجرام إن وجد
+      if (!telegramResponse.ok) {
+        const err = await telegramResponse.json()
+        console.error("Telegram API Error:", err)
+      }
+    } else {
+      console.error("Missing Telegram Environment Variables")
     }
 
-    // 4. إرجاع التقرير للموقع
     return aiReport
 
   } catch (error) {
