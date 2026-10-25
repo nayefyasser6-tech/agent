@@ -3,6 +3,8 @@
 import { useState, useRef } from 'react';
 import { submitProject } from '@/actions/submitProject';
 
+
+export const maxDuration = 60;
 const content = {
   ar: {
     title: "AI Agency Quote",

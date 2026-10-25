@@ -1,8 +1,5 @@
 'use server'
 
-// زيادة وقت الانتظار المسموح به في Vercel لتجنب قطع الاتصال قبل رد Gemini
-export const maxDuration = 60; 
-
 import { createClient } from '@supabase/supabase-js'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
@@ -31,7 +28,6 @@ export async function submitProject(formData: FormData) {
       const aiResult = await model.generateContent(prompt)
       aiReport = aiResult.response.text()
     } catch (geminiError: any) {
-      // طباعة الخطأ بشكل مفصل أكثر لمعرفة ما إذا كان بسبب المفتاح أو الشبكة
       console.error("Gemini Detailed Error:", geminiError?.message || geminiError)
     }
 
