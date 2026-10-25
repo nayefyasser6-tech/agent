@@ -17,36 +17,34 @@ export async function submitProject(formData: FormData) {
   }
 
   try {
-    // 1. تنفيذ الحفظ في Supabase وإرسال الإشعار لتيليجرام في نفس اللحظة
+    // 1. تنفيذ الحفظ في Supabase بشكل صحيح ومنتظر
+    const { error: dbError } = await supabase.from('project_requests').insert([data])
+    if (dbError) {
+      console.error('Supabase Error:', dbError)
+    }
+
+    // 2. إرسال الإشعار لتيليجرام بشكل مباشر
     const botToken = process.env.TELEGRAM_BOT_TOKEN
     const chatId = process.env.TELEGRAM_CHAT_ID
 
-    const telegramMessage = `
+    if (botToken && chatId) {
+      const telegramMessage = `
 🔔 **طلب مشروع جديد من الموقع:**
 👤 **الاسم:** ${data.client_name}
 📞 **الهاتف:** ${data.phone}
 💬 **فكرة المشروع:** ${data.project_idea}
-    `.trim()
+      `.trim()
 
-    const promises: Promise<any>[] = [
-      supabase.from('project_requests').insert([data])
-    ]
-
-    if (botToken && chatId) {
-      promises.push(
-        fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: telegramMessage,
-            parse_mode: 'Markdown'
-          }),
-        })
-      )
+      await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: telegramMessage,
+          parse_mode: 'Markdown'
+        }),
+      })
     }
-
-    await Promise.all(promises)
 
     // رسالة نجاح تظهر للمستخدم على الموقع
     return "تم إرسال طلبك بنجاح، وسنتواصل معك قريباً!"
