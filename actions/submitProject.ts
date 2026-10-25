@@ -38,3 +38,5 @@ export async function submitProject(formData: FormData) {
     return null
   }
 }
+
+console.error('Submission Error:', error)
